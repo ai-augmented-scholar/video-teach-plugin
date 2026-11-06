@@ -1,7 +1,7 @@
 {
   "name": "video-teach-plugin",
   "displayName": "Video Teach Plugin",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "For educational videos with talking-head footage: from a beat sheet and one recording to a finished teaching video. Cleans the sound, cuts the retakes, makes text cards, captions and short clips. Claude Code on a Mac with Apple Silicon.",
   "author": {
     "name": "The AI-Augmented Scholar",

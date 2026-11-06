@@ -1,6 +1,6 @@
 ---
 name: video-with-slides
-description: Put a lecturer's own slides next to their talking-head video, with each slide coming on screen when they start talking about it. Takes the cut video and the deck they lectured from (PDF from PowerPoint, Keynote, Canva, Google Slides or Beamer, or a .pptx), proposes the slide timing from the transcript, lets the user correct it in a timing table, and renders one 1920x1080 MP4 with the slide beside the speaker, the speaker in a corner box, the slide alone, or the speaker full frame. The alternative to text cards for a lecture that already has slides. Use when the user asks to "add my slides to the video", "put the slides next to me", "sync my slides with my lecture", "make a lecture video with slides", or has a lecture recording plus a slide deck.
+description: Put a lecturer's own slides next to their talking-head video, with each slide coming on screen when they start talking about it. Takes the cut video and the deck they lectured from (PDF from PowerPoint, Keynote, Canva, Google Slides or Beamer, or a .pptx), proposes the slide timing from the transcript, lets the user correct it in a timing table, and renders one 1920x1080 MP4 with the slide beside the speaker, the speaker in a corner box, the slide alone, or the speaker full frame. The alternative to text cards for a lecture that already has slides. Use when the user asks to "add my slides to the video", "put the slides next to me", "sync my slides with my lecture", or wants slides laid over a video that is already cut, in one of its four layouts. For the drop-in, end-to-end lecture chain (recording + deck in, finished video out, no approval stops), use lecture-video instead.
 ---
 
 # Video with slides
@@ -18,6 +18,17 @@ timing must be made on the final one.
 **Slides or text cards?** For a lecture with a deck, this skill replaces
 `text-treatments`: the slides already carry the titles, terms and lists that
 text cards would put on screen. Use text cards for a talk without slides.
+
+**This skill or `lecture-video`?** Both put a lecturer's deck on screen.
+`lecture-video` is the drop-in chain: the user drops the recording and the
+deck into a video folder and gets a finished video, with no approval stops.
+It cuts between two fixed settings (the speaker alone with text cards in the
+free side, and the slide with a small speaker insert), decides itself when to
+switch, puts the slides in before the cut and runs `perfect-cuts` on the
+result, and bakes text cards into setting A. `make-video` hands a lecture with
+a deck to `lecture-video`. This skill stays for the other case: slides laid
+over a video that is already cut, in any of four layouts, with the timing
+table shown to the user for approval, and no text cards.
 
 ## What this produces
 

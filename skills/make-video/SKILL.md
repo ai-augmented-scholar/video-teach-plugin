@@ -1,6 +1,6 @@
 ---
 name: make-video
-description: Run the whole video-teach-plugin workflow for an educational video with talking-head footage, from beat sheet to finished video and short clips, in 14 steps. Claude does the sound, the cut, the text cards or slides, the captions and the clips; the user drafts, films, reviews, assembles in iMovie (or any editor) and publishes by hand. Keeps a status file in the video's folder, stops with a Mac notification at every step that is the user's, and picks up where it left off after a break. Use when the user says "make a video", "start a new lecture video", "continue my video", "where was I", or runs /video-teach-plugin:make-video.
+description: Run the whole video-teach-plugin workflow for an educational video with talking-head footage, from beat sheet to finished video and short clips, in 14 steps. Claude does the sound, the cut, the text cards or slides (a lecture with a deck goes through lecture-video, end to end), the captions and the clips; the user drafts, films, reviews, assembles in iMovie (or any editor) and publishes by hand. Keeps a status file in the video's folder, stops with a Mac notification at every step that is the user's, and picks up where it left off after a break. Use when the user says "make a video", "start a new lecture video", "continue my video", "where was I", or runs /video-teach-plugin:make-video.
 ---
 
 # make-video: the whole workflow, one step at a time
@@ -82,9 +82,9 @@ Run them in order. "You" steps belong to the user (see "A step that is yours").
 | 01 | You + Claude | Draft the beat sheet | `beatsheet` → `beat-sheet.html` in the video folder |
 | 02 | You | Film | the raw take, placed in the video folder |
 | 03 | Claude | Clean the sound | `audio-enhance` on the **raw take** → `<stem>_enhanced-audio.<ext>` |
-| 04 | Claude | Cut the retakes | `perfect-cuts` on the **cleaned file from 03**, never the raw take → `1 WATCH - final video (C).mp4`; then the audio gate |
+| 04 | Claude | Cut the retakes | `perfect-cuts` on the **cleaned file from 03**, never the raw take → `1 WATCH - final video (C).mp4`; then the audio gate. **With a slide deck: `lecture-video` does 04 and 06 in one run** |
 | 05 | You | Review the cut | watch the MP4 once; changes go back to 04 |
-| 06 | Claude | Text cards **or** slides | ask about a slide deck → `video-with-slides`, or the card text from `text-treatments` |
+| 06 | Claude | Text cards **or** slides | a slide deck → `lecture-video` (already done at 04); no deck → the card text from `text-treatments` |
 | 07 | You, then Claude | Assemble | iMovie, or any editor; then Claude burns the text cards into the export |
 | 08 | Claude + You | Title, opening, thumbnail | `first-impression` → `first-impression.html`; the user makes the thumbnail |
 | 09 | Claude | Captions and description | `captions-and-description` on the user's **final export**; then the audio gate |
@@ -120,7 +120,25 @@ tools are not installed: point the user to `/video-teach-plugin:setup` and stop.
 
 ### 04 Cut the retakes
 
-`set 04 running --input "<cleaned file from 03>"`. Run `perfect-cuts` on the
+**First: does this lecture have a slide deck?** If a `.pdf` or `.pptx` sits in the
+video folder, the answer is yes (say so in one line). Otherwise ask once: "Does this
+lecture have a slide deck you want on screen?" On a yes, ask the user to put the deck
+into the video folder, and take the **lecture path**:
+
+1. `set 04 running --input "<cleaned file from 03>"`.
+2. Run the `lecture-video` skill on the video folder with
+   `--video "<cleaned file from 03>"` (it is already audio-enhanced, so lecture-video
+   does not enhance it again). It runs all four phases with no approval stop: the A/B
+   slide edit, its own `perfect-cuts` pass with the audio gate, the text cards in
+   setting A, and the finished video with the text baked in.
+3. `set 04 done --output "<folder>/<folder name> perfect cut (C)/1 WATCH - final video (C).mp4"`.
+4. Step 05 below is then the review of `<folder name>-finished-with-text.mp4`, the whole
+   lecture. Changes go back to the lecture-video phase they belong to (a slide or A/B
+   timing: from compose; a cut: from cut; a card: finish); `reopen 04` first.
+5. Step 06 needs no new work: `set 06 done --choice path=lecture-video --output
+   "<folder>/<folder name>-finished-with-text.mp4"`.
+
+Without a deck, cut as follows. `set 04 running --input "<cleaned file from 03>"`. Run `perfect-cuts` on the
 **cleaned file**, never the raw take: on raw audio, room noise keeps restarts
 glued to the line before them. Give it the answers you already have, so it asks
 only what is open: the clip path, Q1 (script) from the beat sheet or step 01's
@@ -178,12 +196,16 @@ A "you" step: notify, then tell the user to watch `1 WATCH - final video
 
 ### 06 Text cards or slides
 
-Ask one question: **"Does this lecture have a slide deck you want on screen?"**
+On the lecture path this step is already done (see 04). Otherwise ask one
+question: **"Does this lecture have a slide deck you want on screen?"**
 
-- **Yes** → run `video-with-slides` on the finished cut (`1 WATCH - final video
-  (C).mp4`) with the deck. Its output has the cut's sound and length, so it
-  becomes the video the user assembles. `set 06 done --choice path=slides
-  --output "<cut name>-with-slides.mp4"`.
+- **Yes** (the deck turned up only now) → run `lecture-video` on the video
+  folder with `--video "<cleaned file from 03>"`. It makes its own cut from the
+  slide composite, so its package supersedes the step-04 cut; say so in one
+  line. `set 06 done --choice path=lecture-video --output
+  "<folder>/<folder name>-finished-with-text.mp4"`. (For slides laid over the
+  step-04 cut in another layout, with no cards, `video-with-slides` is the
+  alternative: `--choice path=slides --output "<cut name>-with-slides.mp4"`.)
 - **No** → run `text-treatments` Step 1 only: it writes the cards from the
   transcript, each with the words it belongs to, and shows the wording first.
   Nothing renders yet: the cards are burned into the final export at the end of
@@ -198,8 +220,13 @@ A "you" step. Notify, then give the hand-off in plain words:
 - **With text cards:** put the video together **without** the cards (the
   background, any screen recordings, anything else). Claude adds the cards
   afterwards, each at its words.
-- **With slides:** the `-with-slides.mp4` already is the video; import it and
-  add anything else they want.
+- **Lecture path (lecture-video):** `<folder name>-finished-with-text.mp4` already
+  is the finished video, text included. If the user wants nothing else, `set 07
+  done --output` that file. To add more in iMovie (or any editor), import it and
+  export again; for an editor that reads alpha, the cut (`1 WATCH`) plus
+  `<folder name>-text-overlay.mov` on the track above keeps the text editable.
+- **With slides (video-with-slides):** the `-with-slides.mp4` already is the
+  video; import it and add anything else they want.
 - Then: export the finished video into the video folder (in iMovie: File >
   Share > File) and say "done".
 
@@ -294,4 +321,6 @@ it is done (check the file it should have produced), mark it `done`, and go on.
 - "Continue my video." / "Where was I?" - shows the 14 steps and picks up.
 - "Start a new lecture video about <topic>."
 - "Go back to the cut." - reopens step 04.
-- "Skip the text cards." / "This lecture has slides." - steers step 06.
+- "Skip the text cards." / "This lecture has slides." - steers steps 04 and 06.
+- `/video-teach-plugin:lecture-video` - drop a recording and a deck into a video
+  folder and get the finished lecture video, with no stops.

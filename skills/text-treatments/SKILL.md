@@ -213,6 +213,23 @@ Tell the user in plain words: `<export name>-with-cards.mp4` is the finished
 video. Their own export stays as it was. To change a word or a time, edit
 `cards.json` and run Steps 2 to 4 again; nothing has to be redone in the editor.
 
+## Lecture videos (lecture-video)
+
+`lecture-video` uses this skill's scripts in one pass with no approval, on its own
+finished cut:
+
+- `place_cards.py place ... --blackout <folder>/lecture/settings-final.json` puts no card
+  over setting B (slides with the speaker insert): a card whose place is in B is skipped,
+  a card that would run into B ends before it, and a card left with less than its reading
+  time is skipped, not flashed. When `cards.json` sits in `<folder>/text-cards/` and
+  `<folder>/lecture/settings-final.json` exists, it is used without the flag;
+  `--no-blackout` turns that off.
+- `--timeline-props FILE` writes the props for one full-length overlay: every card at its
+  own start on a clip as long as the video, transparent in between.
+- `render.mjs --cards FILE --timeline --look lecture-look.json --modes alpha` renders that
+  overlay. The look is the user's saved look with the free column of setting A, and the
+  plate set by lecture-video's plate check.
+
 ## How the renderer works (for changes to it)
 
 The renderer is a Remotion project in `renderer/`. Cards, look and frame rate
@@ -255,6 +272,10 @@ choreography stretch instead of clip.
 > asking for `display: flex` silently gets block flow, and the accent rules of
 > the pull quote, lower third and end card collapse to zero size. If you add a
 > wrapper, keep the layout styles on the element that holds the children.
+
+**Timeline mode.** With `timeline: true` and `totalDur` in the props, the composition is
+`totalDur` seconds long and each card is a `<Sequence>` from its own `start`; without
+it, the cards play end to end (the card strip that `burn_cards.py` lays over an export).
 
 **Modes.** `alpha` (transparent ground; the source of the burn), `imovie` (pure
 `#00FF00` ground; plate opaque with hard edges; kept for a user who wants to

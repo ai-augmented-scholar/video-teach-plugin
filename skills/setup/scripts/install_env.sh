@@ -7,7 +7,9 @@
 # data folder. Nothing touches the user's own Python.
 #
 #   $TV_DATA/venv      parakeet-mlx (speech to text: Parakeet TDT 0.6b v3 on
-#                      MLX), pypdfium2 (reads slide decks saved as PDF), and
+#                      MLX), pypdfium2 (reads slide decks saved as PDF), numpy
+#                      (already a Parakeet dependency; named so the lecture
+#                      chain's HDR grade, hdr_grade.py, can count on it), and
 #                      optionally opencv-python-headless (--with-opencv; only
 #                      for short clips cut from slides with a camera inset)
 #   $TV_DATA/denoise   deepfilternet, torch<2.9, torchaudio<2.9, soundfile
@@ -55,7 +57,7 @@ UV_PYTHON_INSTALL_DIR="$TV_DATA/python"; export UV_PYTHON_INSTALL_DIR
 
 speech_ok() {
   "$VENV/bin/parakeet-mlx" --help >/dev/null 2>&1 &&
-  "$VENV/bin/python" -c "import pypdfium2" >/dev/null 2>&1 &&
+  "$VENV/bin/python" -c "import pypdfium2, numpy" >/dev/null 2>&1 &&
   { [ $OPENCV = 0 ] || "$VENV/bin/python" -c "import cv2" >/dev/null 2>&1; }
 }
 denoise_ok() {
@@ -89,7 +91,7 @@ else
   echo "Step 1 of 3: speech to text and PDF reader (uv downloads Python 3.11 if needed)..."
   [ -x "$VENV/bin/python" ] || "$UV" venv --python 3.11 --managed-python "$VENV" ||
     { echo "install_env: could not create $VENV" >&2; exit 1; }
-  set -- parakeet-mlx pypdfium2
+  set -- parakeet-mlx pypdfium2 numpy
   [ $OPENCV = 1 ] && set -- "$@" opencv-python-headless
   "$UV" pip install --python "$VENV/bin/python" "$@" ||
     { echo "install_env: the speech-to-text install failed (see above)." >&2; exit 1; }

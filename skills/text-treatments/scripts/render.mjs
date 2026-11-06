@@ -3,7 +3,12 @@
 //
 //   TV_DATA="<plugin data folder>" node render.mjs --cards cards.json --out DIR \
 //       [--footage VIDEO] [--modes alpha,imovie,ground] [--look look.json] \
-//       [--name STEM] [--check]
+//       [--name STEM] [--check] [--timeline]
+//
+// --timeline (lecture-video): --cards is the overlay props file that
+// place_cards.py --timeline-props wrote ({timeline, totalDur, cards with
+// start}). The clip is then as long as the video, each card at its own start,
+// transparent in between, so it lies over the finished video with no placing.
 //
 // What it does, in order:
 //   1. Syncs the renderer from the plugin into $TV_DATA/renderer (the plugin
@@ -40,11 +45,12 @@ const fail = (msg) => {
 };
 
 // ---- arguments ------------------------------------------------------------
-const args = {modes: "alpha,imovie", name: "text-cards", check: false};
+const args = {modes: "alpha,imovie", name: "text-cards", check: false, timeline: false};
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--check") args.check = true;
+  else if (a === "--timeline") args.timeline = true;
   else if (a.startsWith("--")) args[a.slice(2)] = argv[++i];
 }
 if (!args.cards) fail("--cards <cards.json> is required");
@@ -95,13 +101,21 @@ if (setup.status !== 0) fail(`renderer setup failed:\n${setup.stderr || setup.st
 
 // ---- 2. props ---------------------------------------------------------------
 let cards;
+let totalDur = null;
 try {
   const raw = JSON.parse(readFileSync(expand(args.cards), "utf8"));
   cards = Array.isArray(raw) ? raw : raw.cards;
+  if (raw.timeline) args.timeline = true;
+  if (args.timeline) totalDur = Number(raw.totalDur);
 } catch (e) {
   fail(`cannot read the cards file: ${e.message}`);
 }
 if (!Array.isArray(cards) || cards.length === 0) fail("the cards file holds no cards");
+if (args.timeline) {
+  if (!(totalDur > 0)) fail("--timeline needs the overlay props of place_cards.py --timeline-props (totalDur)");
+  cards = cards.filter((c) => typeof c.start === "number");
+  if (cards.length === 0) fail("no card in the overlay props has a start time");
+}
 
 let look = {};
 const cfgPath = join(DATA, "config.json");
@@ -131,7 +145,7 @@ if (args.footage) {
   if (m) fps = Math.round((Number(m[1]) / Number(m[2])) * 1000) / 1000;
 }
 
-const props = {cards, look, fps};
+const props = args.timeline ? {cards, look, fps, timeline: true, totalDur} : {cards, look, fps};
 const stem = args.name;
 const propsPath = join(OUT, `${stem}-props.json`);
 writeFileSync(propsPath, JSON.stringify(props, null, 2));
@@ -168,12 +182,17 @@ for (const mode of args.modes.split(",").map((m) => m.trim()).filter(Boolean)) {
 const starts = [];
 let acc = 0;
 for (const c of cards) {
-  starts.push(acc);
+  starts.push(args.timeline ? Math.round(c.start * fps) : acc);
   acc += Math.round(c.dur * fps);
 }
-const total = acc;
+const total = args.timeline ? Math.round(totalDur * fps) : acc;
 
-if (args.check) {
+// The boundary check renders every frame as PNG: fine for a card strip, far too
+// slow for a full-length lecture overlay. lecture-video checks the overlay's
+// alpha itself (zero inside setting B, visible inside each card).
+if (args.check && args.timeline) {
+  summary.check = {skipped: "timeline mode: lecture_run.py checks the overlay's alpha"};
+} else if (args.check) {
   // Remotion reads a dot in the folder name as a file extension, so no dot here.
   const tmp = join(OUT, `${stem}-check-frames`);
   rmSync(tmp, {recursive: true, force: true});

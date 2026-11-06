@@ -11,6 +11,40 @@ the video.
 
 Made by The AI-Augmented Scholar: [aiaugmentedscholar.co](https://aiaugmentedscholar.co).
 
+## New in 2.1: drop in a lecture and its slides, get a finished video
+
+```
+/video-teach-plugin:lecture-video
+```
+
+Put your talking-head recording and your slide deck (PDF or PowerPoint) into
+a video folder, and Claude makes the finished lecture video from them, with no
+stops for your approval along the way:
+
+- It cuts between two looks. **Setting A** is you alone, framed a little right
+  of centre, with animated text cards in the free space beside you. **Setting
+  B** is your slide almost full screen on a neutral background, with you in a
+  small rounded box at the side.
+- Claude decides when to switch, from what you say: the slides come up while
+  you work through a definition, a list or a figure; you are on screen for the
+  greeting, a story, a question to the class and the sign-off. You do not have
+  to say anything special on camera. (If you like to direct the edit yourself,
+  say "switch to setting B" or "back to setting A" while filming: those
+  directions then decide, and they are cut out of the video.)
+- It cleans the sound, grades phone HDR footage, cuts the retakes, false
+  starts and ums, and writes text cards from your own words, only where you
+  are on screen.
+- You get the finished MP4 with the text in it, ready to upload, plus the cut
+  without text, a transparent text overlay for an editor, captions, and logs
+  that say what was decided and why. You judge the result at the end and
+  name anything to change.
+
+`make-video` uses it by itself when your lecture has a deck. The older
+`video-with-slides` stays for laying slides over a video you already cut, in
+other layouts. Nothing new to install: setup 2.0 already has every tool it
+uses. For a PowerPoint deck it uses PowerPoint or LibreOffice if your Mac has
+one; otherwise export the deck as PDF.
+
 ## What it does
 
 The plugin follows one workflow, from a beat sheet to a finished video, in
@@ -31,8 +65,9 @@ The plugin follows one workflow, from a beat sheet to a finished video, in
 
 6. Claude writes animated text cards from your own words: a title, step
    cards, a pull quote, a lower third, an end card. If your lecture has a
-   slide deck, Claude puts the slides beside you instead, timed to what you
-   say (`video-with-slides`).
+   slide deck, `lecture-video` builds the whole lecture instead (steps 4 and
+   6 in one run): your slides and you, switched by what you say, with text
+   cards where you are on screen.
 7. You put the video together in iMovie, or any video editor, and export it.
    Claude then burns the text cards into your export, each one at the moment
    you say its words, and long enough to read.
@@ -129,6 +164,8 @@ Each later video starts with one line: same filming setup as last time?
 - `/video-teach-plugin:make-video` runs the whole workflow in order. It stops
   and sends a Mac notification whenever a step is yours, and it picks up
   where you left off after a break.
+- `/video-teach-plugin:lecture-video` turns a recording plus a slide deck in
+  a video folder into the finished lecture video, with no stops.
 - `/video-teach-plugin:setup` runs once per computer.
 - `/video-teach-plugin:beatsheet` drafts a beat sheet for a lecture on any topic.
 
@@ -137,6 +174,7 @@ Plain sentences work too:
 - "Clean up the sound on this recording."
 - "Cut the retakes out of this take."
 - "Make text cards from this transcript."
+- "Here is my lecture and the slides: make the video."
 - "Put my slides next to me in this video."
 - "Make short clips from this lecture."
 - "Is this audio good enough to publish?"

@@ -11,6 +11,8 @@ Two subcommands:
 
   place_cards.py place --cards cards.json --words words.json --out timed.json
                        [--fps 60] [--duration SECONDS] [--timing-json FILE]
+                       [--blackout settings-final.json | --no-blackout]
+                       [--timeline-props props.json]
       Finds each card's anchor phrase in the words, and sets the card's start,
       its length, and the entry time of each row of a build. Prints a timing
       table for the user to approve.
@@ -24,6 +26,23 @@ The card fields this script reads (the renderer ignores them):
   until         Optional: the words after which the card leaves.
   fixedDur      true keeps the card's own `dur`.
   overlap       true lets this card share screen time with another card.
+
+Setting B (lecture videos). A lecture cut between setting A (talking head,
+left 46% free for text) and setting B (slides with the speaker as a small
+insert) takes no cards over setting B. `--blackout` reads the lecture-video
+skill's settings-final.json (its b_intervals, on the final video's clock):
+  - a card whose start falls in a B interval is SKIPPED, unless its anchor
+    word is already in A (then it starts where B ends);
+  - a card that would run into a B interval ends GAP seconds before it;
+  - a card that then has less time than its reading minimum is SKIPPED, not
+    shown for a flash.
+When the cards file sits in <video folder>/text-cards/ and
+<video folder>/lecture/settings-final.json exists, it is used without the
+flag. `--no-blackout` turns that off, for a video that has no setting B.
+
+`--timeline-props FILE` writes the props for the full-length overlay: every
+card at its own start time on a clip as long as the video, transparent
+between cards, so the finished .mov goes on top of the video as the last step.
 
 Length rules. A teaching video is read, not glanced at:
   - A simple card stays at least 8 seconds, longer when its text needs more
@@ -320,7 +339,7 @@ def label_of(card):
     return rows[0] if rows else ""
 
 
-def place(cards, words, duration, fps):
+def place(cards, words, duration, fps, blackout=None):
     duration = duration or ((words[-1]["end"] + 2.0) if words else 0.0)
     snap = (lambda x: round(x * fps) / fps) if fps else (lambda x: x)
     placed = []
@@ -397,7 +416,30 @@ def place(cards, words, duration, fps):
         c["_want"] = want
         c["end"] = end
 
-    # caps: the next card, the end of the video
+    # setting B: no card starts in it, and none runs into it
+    blackout = sorted(blackout or [])
+    if blackout:
+        for c in placed:
+            if c["start"] is None:
+                continue
+            hit = next((b for b in blackout if b[0] - 1e-6 <= c["start"] < b[1]), None)
+            if hit:
+                if c["start"] + LEAD >= hit[1] - 1e-6:   # its anchor is already in A
+                    c["end"] += hit[1] - c["start"]
+                    c["start"] = hit[1]
+                    c["_notes"].append("moved to the end of setting B")
+                else:
+                    c["_notes"].append("SKIPPED: its place is setting B (slides + insert)")
+                    c["start"] = c["end"] = None
+                    continue
+            nxt_b = next((b for b in blackout if b[0] > c["start"]), None)
+            if nxt_b and nxt_b[0] - GAP - c["start"] < c["_want"] - 0.05:
+                c["_notes"].append("SKIPPED: only %.1f s of setting A before the next "
+                                   "setting B, the card needs %.1f s"
+                                   % (nxt_b[0] - GAP - c["start"], c["_want"]))
+                c["start"] = c["end"] = None
+
+    # caps: the next card, the next setting B, the end of the video
     timed = sorted([c for c in placed if c["start"] is not None], key=lambda c: c["start"])
     for i, c in enumerate(timed):
         cap = duration
@@ -406,6 +448,9 @@ def place(cards, words, duration, fps):
                 if not nxt.get("overlap"):
                     cap = min(cap, nxt["start"] - GAP)
                     break
+        nxt_b = next((b for b in blackout if b[0] > c["start"]), None)
+        if nxt_b:
+            cap = min(cap, nxt_b[0] - GAP)
         if c["end"] > cap:
             c["end"] = cap
             if cap - c["start"] < c["_want"] - 0.05:
@@ -459,6 +504,12 @@ def main():
     p.add_argument("--duration", type=float, default=None)
     p.add_argument("--timing-json", default=None,
                    help="also write {cards:[{dur,delays}]} for a renderer")
+    p.add_argument("--blackout", default=None,
+                   help="settings-final.json from the lecture-video skill: no card over setting B")
+    p.add_argument("--no-blackout", action="store_true",
+                   help="ignore a lecture/settings-final.json found next to the cards file")
+    p.add_argument("--timeline-props", default=None,
+                   help="write the props for a full-length overlay (cards at their own times)")
     a = ap.parse_args()
 
     if a.cmd == "words":
@@ -470,7 +521,20 @@ def main():
     raw = json.loads(Path(a.cards).expanduser().read_text())
     cards = raw["cards"] if isinstance(raw, dict) else raw
     words, wdur = load_words(Path(a.words).expanduser())
-    placed, duration = place(cards, words, a.duration or wdur, a.fps)
+    blackout, bdur = None, None
+    bpath = Path(a.blackout).expanduser() if a.blackout else None
+    if bpath is None and not a.no_blackout:
+        guess = Path(a.cards).expanduser().resolve().parent.parent / "lecture" / "settings-final.json"
+        if guess.is_file():
+            bpath = guess
+            print("place_cards: using %s (setting B takes no cards; --no-blackout to ignore)" % guess)
+    if bpath is not None:
+        rec = json.loads(bpath.read_text())
+        blackout = [(float(x), float(y)) for x, y in rec["b_intervals"]]
+        bdur = rec.get("duration")
+        print("place_cards: %d setting-B interval(s), %.0f s, closed to cards"
+              % (len(blackout), sum(y - x for x, y in blackout)))
+    placed, duration = place(cards, words, a.duration or bdur or wdur, a.fps, blackout)
 
     out = []
     for c in placed:
@@ -481,11 +545,19 @@ def main():
             d["end"] = round(d["end"], 4)
         out.append(d)
     result = {"fps": a.fps, "duration": duration, "cards": out}
+    if blackout:
+        result["blackout"] = [list(b) for b in blackout]
     Path(a.out).expanduser().write_text(json.dumps(result, ensure_ascii=False, indent=1))
     if a.timing_json:
         timing = {"cards": [({"dur": d["dur"], "delays": d.get("delays")}
                              if d["start"] is not None else None) for d in out]}
         Path(a.timing_json).expanduser().write_text(json.dumps(timing, indent=1) + "\n")
+    if a.timeline_props:
+        props = {"timeline": True, "totalDur": duration, "fps": a.fps,
+                 "cards": [d for d in out if d["start"] is not None]}
+        Path(a.timeline_props).expanduser().write_text(json.dumps(props, ensure_ascii=False) + "\n")
+        print("place_cards: overlay props, %d cards on a %.1f s clip -> %s"
+              % (len(props["cards"]), duration, a.timeline_props))
     print(table(placed))
     bad = sum(1 for c in placed if c["_notes"])
     print("\n%d cards, %d with notes. Timed cards -> %s" % (len(placed), bad, a.out))

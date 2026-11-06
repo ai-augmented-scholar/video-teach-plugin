@@ -68,8 +68,9 @@ TV_DATA="${CLAUDE_PLUGIN_DATA}" sh "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/i
 ```
 
 It makes two environments, because the two tools need incompatible versions
-of a shared library (NumPy): `venv/` holds Parakeet and the PDF reader for
-slide decks, and `denoise/` holds DeepFilterNet. It links `deepFilter` into
+of a shared library (NumPy): `venv/` holds Parakeet, the PDF reader for
+slide decks and NumPy (which the lecture chain's HDR grade uses; it comes
+with Parakeet anyway, so it adds no download), and `denoise/` holds DeepFilterNet. It links `deepFilter` into
 `venv/bin`, so every skill finds every tool in one place. It ends with a check
 of each tool. Relay any MISSING line and the error above it.
 
@@ -200,4 +201,9 @@ pass/fail table.
   Remotion" launcher writes to `~/.perfect-cuts` when the user runs it.
 - `perfect-clips` installs its own renderer (about 250 MB) the first time it
   runs.
+- `lecture-video` needs nothing beyond these steps. It turns a `.pptx` deck into
+  a PDF with Microsoft PowerPoint or LibreOffice when one of them is already
+  installed, and otherwise asks for a PDF export of the deck; setup installs
+  neither. Phone HDR footage is graded with the `venv/` Python (NumPy) and
+  ffmpeg.
 - Do not install anything outside these steps, and never with `sudo`.

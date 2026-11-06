@@ -1,6 +1,6 @@
 import React from "react";
 import {Composition} from "remotion";
-import {TreatmentPackage, totalFrames, type PackageProps} from "./TreatmentPackage";
+import {TreatmentPackage, totalFrames, timelineFrames, type PackageProps} from "./TreatmentPackage";
 import {sampleCards} from "./sample-cards";
 import {DEFAULT_LOOK} from "./design-systems";
 import type {Mode} from "./Frame";
@@ -36,7 +36,8 @@ export const RemotionRoot: React.FC = () => (
           const fps = p.fps || DEFAULT_FPS;
           return {
             fps,
-            durationInFrames: totalFrames(p.cards, fps),
+            durationInFrames:
+              p.timeline && p.totalDur ? timelineFrames(p.totalDur, fps) : totalFrames(p.cards, fps),
             props: {...p, mode, fps} as never,
           };
         }}

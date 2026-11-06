@@ -69,15 +69,42 @@ const renderCard = (card: Card, ds: DesignSystem, mode: Mode) => {
 
 // The props a render receives (`--props=<file>.json`): the cards for this
 // video, the user's saved look, and the frame rate of their footage.
+//
+// Timeline mode (lecture-video): the clip is as long as the finished video
+// (`totalDur` seconds) and every card sits at its own `start`, so the clip lies
+// over the video as the last step with no cutting or placing. The frames
+// between cards are bare ground, which is transparent in the alpha render.
 export type PackageProps = {
   cards: Card[];
   look?: Look;
   mode: Mode;
   fps: number;
+  timeline?: boolean;
+  totalDur?: number;
 };
 
-export const TreatmentPackage: React.FC<PackageProps> = ({cards, look, mode, fps}) => {
+export const timelineFrames = (totalDur: number, fps: number) => Math.round(totalDur * fps);
+
+export const TreatmentPackage: React.FC<PackageProps> = ({cards, look, mode, fps, timeline}) => {
   const ds: DesignSystem = buildNeutral(look);
+  if (timeline) {
+    return (
+      <AbsoluteFill>
+        {cards
+          .filter((card) => typeof (card as {start?: unknown}).start === "number")
+          .map((card, i) => (
+            <Sequence
+              key={i}
+              from={Math.round((card as unknown as {start: number}).start * fps)}
+              durationInFrames={Math.round(card.dur * fps)}
+              name={card.kind}
+            >
+              {renderCard(card, ds, mode)}
+            </Sequence>
+          ))}
+      </AbsoluteFill>
+    );
+  }
   let from = 0;
   return (
     <AbsoluteFill>

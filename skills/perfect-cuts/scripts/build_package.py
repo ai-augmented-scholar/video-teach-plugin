@@ -19,6 +19,13 @@ Usage:
                "angles": {...}                                      (optional, two cameras)
              }
              Every block in the map must be either in a clip or in "cut".
+
+             Or, from refine_cuts.py (the mechanical editorial pass), clips
+             already in frames:
+             {"map": "...", "mode": "frames", "cut_log": "<cut-log.csv>",
+              "clips": [{"in_frame": 120, "out_frame": 388, "text": "..."}]}
+             The clips are used as they are (held inside the source), and the
+             cut log is refine_cuts.py's own, with its reason per block.
 <package dir> created if missing; every package file goes here.
 
 Writes: the MP4 (main output), FCPXML, Premiere/Resolve XML, EDL, SRT, the
@@ -250,6 +257,28 @@ def run(script, *args):
     return p.stdout.strip()
 
 
+def build_frames(a, source, decisions, meta, fps, src_frames):
+    """refine_cuts.py's output: clips in frames, its own cut log."""
+    clips, last_out = [], -1
+    for n, c in enumerate(decisions.get("clips") or [], 1):
+        i0, i1 = int(c["in_frame"]), min(int(c["out_frame"]), src_frames)
+        if i1 <= i0:
+            raise Fail(f"clip {n} ends before it starts ({i0} -> {i1})")
+        if i0 < last_out:
+            raise Fail(f"clip {n} overlaps clip {n - 1} in the source")
+        last_out = i1
+        clips.append({"in_frame": i0, "out_frame": i1, "text": c.get("text", "")})
+    if not clips:
+        raise Fail('cuts.json has no "clips"')
+    log_src = Path(decisions.get("cut_log") or "").expanduser()
+    if not log_src.is_absolute():
+        log_src = Path(a.cuts).resolve().parent / log_src
+    if not log_src.is_file():
+        raise Fail(f"frames mode needs refine_cuts.py's cut log; not found: {log_src}")
+    return package(a, source, meta, fps, clips, decisions, log_src=log_src,
+                   counts={"blocks_kept": None, "blocks_cut": None}, warnings=[], trimmed=[])
+
+
 def build(a):
     source = Path(a.source).expanduser().resolve()
     if not source.is_file():
@@ -270,6 +299,8 @@ def build(a):
                    f"({source}, {meta['source_duration']:.3f} s)")
     fps = meta["fps"]
     src_frames = int(math.floor(meta["source_duration"] * fps + 1e-6))
+    if decisions.get("mode") == "frames":
+        return build_frames(a, source, decisions, meta, fps, src_frames)
 
     # Every block gets exactly one decision.
     kept, cut = {}, {int(k): v for k, v in (decisions.get("cut") or {}).items()}
@@ -358,6 +389,14 @@ def build(a):
             clip["angle"] = c["angle"]
         clips.append(clip)
 
+    return package(a, source, meta, fps, clips, decisions, blocks=blocks, kept=kept, cut=cut,
+                   clips_in=clips_in, counts={"blocks_kept": len(kept), "blocks_cut": len(cut)},
+                   warnings=warnings, trimmed=trimmed)
+
+
+def package(a, source, meta, fps, clips, decisions, log_src=None, blocks=None, kept=None,
+            cut=None, clips_in=None, counts=None, warnings=(), trimmed=()):
+    """Write every package file from clips in frames, and verify the MP4."""
     out = Path(a.out).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
     stem = source.stem
@@ -394,19 +433,22 @@ def build(a):
     # Cut log: every block, kept and cut, with the reason. UTF-8 WITH a BOM,
     # or Excel on macOS reads it as MacRoman and mangles accents and dashes.
     log = out / NAMES["cutlog"]
-    with open(log, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["block", "status", "source_in", "source_out",
-                    "timeline_position", "text", "reason"])
-        for i in sorted(blocks):
-            b = blocks[i]
-            if i in kept:
-                c = clips_in[kept[i] - 1]
-                w.writerow([i, "KEPT", timecode(b["onset"], fps), timecode(b["end"], fps),
-                            kept[i], b["text"], c.get("reason", "kept")])
-            else:
-                w.writerow([i, "CUT", timecode(b["start"], fps), timecode(b["end"], fps),
-                            "", b["text"], cut[i]])
+    if log_src is not None:
+        shutil.copyfile(log_src, log)
+    else:
+        with open(log, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["block", "status", "source_in", "source_out",
+                        "timeline_position", "text", "reason"])
+            for i in sorted(blocks):
+                b = blocks[i]
+                if i in kept:
+                    c = clips_in[kept[i] - 1]
+                    w.writerow([i, "KEPT", timecode(b["onset"], fps), timecode(b["end"], fps),
+                                kept[i], b["text"], c.get("reason", "kept")])
+                else:
+                    w.writerow([i, "CUT", timecode(b["start"], fps), timecode(b["end"], fps),
+                                "", b["text"], cut[i]])
     files["cutlog"] = log
 
     # Verify.
@@ -417,9 +459,10 @@ def build(a):
     result = {"ok": True, "package": str(out), "source": str(source),
               "source_duration": round(meta["source_duration"], 3),
               "expected_duration": round(expected, 3),
-              "clips": len(clips), "blocks_kept": len(kept), "blocks_cut": len(cut),
-              "files": {k: str(v) for k, v in files.items()}, "warnings": warnings,
-              "trimmed_words": trimmed}
+              "clips": len(clips), "blocks_kept": counts["blocks_kept"],
+              "blocks_cut": counts["blocks_cut"],
+              "files": {k: str(v) for k, v in files.items()}, "warnings": list(warnings),
+              "trimmed_words": list(trimmed)}
     if "mp4" in files:
         lufs, tp, gain = hold_ceiling(files["mp4"])
         result.update(loudness_lufs=lufs, true_peak_dbtp=tp, audio_gain_db=gain)

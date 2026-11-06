@@ -1,0 +1,16 @@
+{
+  "_comment": "Example of the editorial pass for refine_cuts.py (lecture-video Judgment 2). Times are seconds on the composite's clock, which is the recording's clock. Each range cuts every block whose middle lies inside it; the reason goes into the cut log. trim_starts: [block_start_s, search_from_s, search_to_s, reason] moves a block's start to the voice's rise after the pause found between the two search times. Spoken setting cues, empty blocks and lone fillers are cut automatically and need no entry. A lecture with nothing to cut takes {}.",
+  "cut_ranges": [
+    [19.4, 19.7, "breath before a restart"],
+    [20.4, 30.7, "retake 1 of 2 of the welcome line (the second take is kept: it flows into the next line)"],
+    [31.3, 38.2, "direction to the camera: 'hold on, I'll say that again'"],
+    [53.0, 113.8, "handling noise while the microphone was adjusted"],
+    [113.8, 123.9, "aside about the microphone (a test note, not lecture content)"],
+    [187.6, 189.1, "false start, restarted at the next block"],
+    [328.1, 333.0, "false start: the sentence is said again cleanly right after"]
+  ],
+  "trim_starts": [
+    [41.41, 41.86, 42.5, "stumble before the restart of the line"],
+    [344.55, 347.66, 348.0, "self-repair at the start of the block"]
+  ]
+}

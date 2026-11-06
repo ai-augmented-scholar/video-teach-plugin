@@ -192,6 +192,16 @@ Filenames are purpose-first and numbered by importance, so a non-technical user 
 | `cut data (C).json` | The cut points in frames — powers the Remotion launcher + automation. |
 | `_remotion-launcher (C).mjs` | Engine behind the launcher. Self-contained: embeds the whole Remotion project template, needs only Node on the target machine. Falls back to a video dropped into the package folder when the original source path is gone. |
 
+**Cuts below block level: `refine_cuts.py`.** `lecture-video` writes its editorial
+pass as cut ranges in seconds (`decisions.json`) and lets
+`scripts/refine_cuts.py` do the mechanical rest: the automatic filler and noise cuts,
+trimming a filler at a block start at the waveform, cutting isolated voiced bursts that
+no word claims, keeping out-points off a following filler, merging close blocks, and
+(with `--cues`) cutting the optional spoken "setting A / setting B" directions. Its
+`cuts.json` is in frames mode (`"mode": "frames"`, clips with `in_frame` / `out_frame`,
+and its own cut log); `build_package.py` builds the same package from it. Its docstring
+holds the rules and the decisions format.
+
 Keep `cuts.json` itself in `$WORK`, not in the package: the launcher reads the first JSON file in the package whose name contains "cut", so a second one there confuses it.
 
 **iMovie, and most simple editors, read no timeline file** — none of the XML files or the EDL. The hand-off for them is the MP4: in iMovie, import `1 WATCH - final video (C).mp4` as media and put it on the timeline. Captions go up next to the video on the course site as `6 CAPTIONS (C).srt`; they are timed to the edited video, so they line up from frame 0. The Final Cut, Premiere/Resolve and EDL files cost nothing to generate; keep them in the package for anyone who opens the edit in an editor that reads them.
