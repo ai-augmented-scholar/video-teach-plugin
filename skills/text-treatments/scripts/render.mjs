@@ -29,12 +29,12 @@
 import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
 import {
-  copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync,
+  copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
   rmSync, writeFileSync,
 } from "node:fs";
 import {basename, dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
-import {homedir} from "node:os";
+import {homedir, tmpdir} from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = resolve(HERE, "..", "renderer");
@@ -193,15 +193,21 @@ const total = args.timeline ? Math.round(totalDur * fps) : acc;
 if (args.check && args.timeline) {
   summary.check = {skipped: "timeline mode: lecture_run.py checks the overlay's alpha"};
 } else if (args.check) {
-  // Remotion reads a dot in the folder name as a file extension, so no dot here.
-  const tmp = join(OUT, `${stem}-check-frames`);
-  rmSync(tmp, {recursive: true, force: true});
-  mkdirSync(tmp, {recursive: true});
+  // Remotion reads any dot in the image-sequence path as a file extension and refuses
+  // the folder, so the frames cannot go into --out when its path has a dot anywhere
+  // (a macOS ".localized" folder, "~/Movies/my.course/"). They go into a
+  // fresh temp folder whose whole path is dot-free instead, and are deleted after.
+  const base = [tmpdir(), "/tmp"].find((d) => d && !d.includes(".") && existsSync(d));
+  if (!base) fail("check: no temp folder without a dot in its path (tried the system temp folder and /tmp)");
+  const tmp = mkdtempSync(join(base, "tv-check-"));
   const r = remotion([
     "render", "src/index.ts", "neutral-ground", tmp, `--props=${propsPath}`,
     "--sequence", "--image-format=png", "--timeout=120000",
   ]);
-  if (r.status !== 0) fail(`check render failed:\n${(r.stderr || r.stdout).slice(-3000)}`);
+  if (r.status !== 0) {
+    rmSync(tmp, {recursive: true, force: true});
+    fail(`check render failed:\n${(r.stderr || r.stdout).slice(-3000)}`);
+  }
   const files = readdirSync(tmp).filter((f) => f.endsWith(".png")).sort();
   const md5 = (i) => createHash("md5").update(readFileSync(join(tmp, files[i]))).digest("hex");
   const bare = md5(0);
