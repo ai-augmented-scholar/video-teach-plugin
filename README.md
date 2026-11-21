@@ -11,84 +11,66 @@ the video.
 
 Made by The AI-Augmented Scholar: [aiaugmentedscholar.co](https://aiaugmentedscholar.co).
 
-## New in 2.1: drop in a lecture and its slides, get a finished video
+## New in 2.2: film it, and Claude does the rest
+
+You set the plugin up once, then you film your lecture. That is your whole part.
+Hand Claude the recording, and the slides if your lecture has them, and the next
+thing you see is the finished video:
 
 ```
-/video-teach-plugin:lecture-video
+Here is my recording and my slides: make the lecture video.
 ```
 
-Put your talking-head recording and your slide deck (PDF or PowerPoint) into
-a video folder, and Claude makes the finished lecture video from them, with no
-stops for your approval along the way:
+(or `/video-teach-plugin:lecture-video`, or `/video-teach-plugin:make-video` for
+the whole workflow). Nothing asks you anything along the way. Claude:
 
-- It cuts between two looks. **Setting A** is you alone, framed a little right
-  of centre, with animated text cards in the free space beside you. **Setting
-  B** is your slide almost full screen on a neutral background, with you in a
-  small rounded box at the side.
-- Claude decides when to switch, from what you say: the slides come up while
-  you work through a definition, a list or a figure; you are on screen for the
-  greeting, a story, a question to the class and the sign-off. You do not have
-  to say anything special on camera. (If you like to direct the edit yourself,
-  say "switch to setting B" or "back to setting A" while filming: those
-  directions then decide, and they are cut out of the video.)
-- It cleans the sound, grades phone HDR footage, cuts the retakes, false
-  starts and ums, and writes text cards from your own words, only where you
-  are on screen.
-- You get the finished MP4 with the text in it, ready to upload, plus the cut
-  without text, a transparent text overlay for an editor, captions, and logs
-  that say what was decided and why. You judge the result at the end and
-  name anything to change.
+- grades phone HDR footage and cleans the sound (noise removal, EQ,
+  compression, steady loudness);
+- cuts the retakes, false starts, ums and pauses: when a sentence goes wrong,
+  start it again without stopping the camera, and Claude keeps the last good one;
+- with slides, cuts between two looks. **Setting A** is you alone, framed a
+  little right of centre, with animated text cards in the free space beside
+  you. **Setting B** is your slide almost full screen, with you in a small
+  rounded box at the side. Claude decides when to switch from what you say:
+  the slide for a definition, a list or a figure; you for a story, an aside or
+  a question to the class;
+- without slides, keeps you on screen throughout, with the text cards beside
+  you;
+- writes the text cards from your own words, only where you are on screen;
+- renders the finished MP4 with the text in it, and writes the captions, a
+  full transcript, a description for your course page, and a title and
+  thumbnail idea.
 
-`make-video` uses it by itself when your lecture has a deck. The older
-`video-with-slides` stays for laying slides over a video you already cut, in
-other layouts. Nothing new to install: setup 2.0 already has every tool it
-uses. For a PowerPoint deck it uses PowerPoint or LibreOffice if your Mac has
-one; otherwise export the deck as PDF.
+Every decision goes into a log with its reason. You watch the finished video
+once. If something should change, say it in a sentence ("show the slide at
+4:10", "bring back the sentence about Kant") and Claude renders it again. Then
+you upload it. New in 2.2: the run works without slides, and the captions and
+the course-page description come out of the same run. Nothing new to install.
 
 ## What it does
 
-The plugin follows one workflow, from a beat sheet to a finished video, in
-14 steps.
+The workflow, from a beat sheet to a finished video:
 
-**You make it**
-
-1. You and Claude draft a beat sheet: bullet points per section, never a
-   word-for-word script.
-2. You film. Restarts are fine; the cut catches them.
-3. Claude cleans the sound: noise removal, EQ, compression, and a steady
-   loudness.
-4. Claude cuts the retakes, false starts, ums and pauses, and hands you one
-   finished video file.
-5. You watch the cut once and send back any changes.
-
-**You finish it**
-
-6. Claude writes animated text cards from your own words: a title, step
-   cards, a pull quote, a lower third, an end card. If your lecture has a
-   slide deck, `lecture-video` builds the whole lecture instead (steps 4 and
-   6 in one run): your slides and you, switched by what you say, with text
-   cards where you are on screen.
-7. You put the video together in iMovie, or any video editor, and export it.
-   Claude then burns the text cards into your export, each one at the moment
-   you say its words, and long enough to read.
-8. You make a thumbnail in Canva or any image app. Claude suggests the
-   title, the thumbnail idea and the opening as one promise.
-9. Claude writes the captions file, a full transcript and a description
-   for your course page.
-10. You upload the video to your course site.
-
-**You reuse it**
-
-11. Claude finds the moments that stand on their own and cuts them into
-    short clips with captions.
-12. You keep the best ones.
-13. You polish them in your editor.
-14. You post them on your course site.
+1. **You and Claude** draft a beat sheet: bullet points per section, never a
+   word-for-word script. Optional.
+2. **You film.** One take per section; restarts are fine.
+3. to 9. **Claude, in one run with no stops:** sound, cut, slides, text cards,
+   the finished video, captions, transcript, course-page description, title
+   and thumbnail idea.
+10. **You watch it**, ask for any change in a sentence, and upload it to your
+    course site.
+11. to 14. **On request:** Claude cuts short clips with captions for
+    announcements or the course homepage; you pick, polish and post them.
 
 Everything runs on your own Mac. Your footage stays on your computer; Claude works from the transcript text.
 
-You do not need a script. A recording is enough. If you filmed from a
-script, Claude also checks that every planned line made it into the cut.
+You do not need a script. A recording is enough.
+
+Each skill also runs on its own, for anyone who wants one piece by hand:
+`audio-enhance`, `perfect-cuts`, `text-treatments` (cards over an export from
+your own editor), `video-with-slides` (other slide layouts) and
+`captions-and-description`. For a PowerPoint deck the plugin uses PowerPoint
+or LibreOffice if your Mac has one; otherwise export the deck as PDF.
 
 ## What you need
 
@@ -161,11 +143,12 @@ Each later video starts with one line: same filming setup as last time?
 
 ## Prompts to remember
 
-- `/video-teach-plugin:make-video` runs the whole workflow in order. It stops
-  and sends a Mac notification whenever a step is yours, and it picks up
-  where you left off after a break.
-- `/video-teach-plugin:lecture-video` turns a recording plus a slide deck in
-  a video folder into the finished lecture video, with no stops.
+- `/video-teach-plugin:make-video` runs the whole workflow. After you film it
+  runs to the finished video without a stop, sends one Mac notification when
+  the video is ready, and picks up where you left off after a break.
+- `/video-teach-plugin:lecture-video` turns a recording, with or without a
+  slide deck, into the finished lecture video with captions and a
+  course-page description, with no stops.
 - `/video-teach-plugin:setup` runs once per computer.
 - `/video-teach-plugin:beatsheet` drafts a beat sheet for a lecture on any topic.
 
@@ -174,6 +157,7 @@ Plain sentences work too:
 - "Clean up the sound on this recording."
 - "Cut the retakes out of this take."
 - "Make text cards from this transcript."
+- "Here is my recording: make the lecture video."
 - "Here is my lecture and the slides: make the video."
 - "Put my slides next to me in this video."
 - "Make short clips from this lecture."
@@ -181,7 +165,7 @@ Plain sentences work too:
 
 ## What it does not do
 
-- It does not publish to your course site. Steps 10 and 14 are yours.
+- It does not publish to your course site. Uploading is yours.
 - It does not run on Windows or on an Intel Mac.
 - It runs in Claude Code only, not in the other Claude apps.
 

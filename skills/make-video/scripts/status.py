@@ -36,22 +36,21 @@ FINISHED = ("done", "skipped")
 
 # The 14 steps of the workflow, in order. owner: who does the work.
 STEPS = [
-    ("01", "beatsheet",  "Draft the beat sheet",          "you + Claude", "beatsheet"),
+    ("01", "beatsheet",  "Draft the beat sheet (optional)", "you + Claude", "beatsheet"),
     ("02", "film",       "Film",                          "you",          None),
-    ("03", "sound",      "Clean the sound",               "Claude",       "audio-enhance"),
-    ("04", "cut",        "Cut the retakes",               "Claude",       "perfect-cuts"),
-    ("05", "review",     "Review the cut",                "you",          None),
-    ("06", "cards",      "Text cards or slides",          "Claude",       "text-treatments | video-with-slides"),
-    ("07", "assemble",   "Assemble in the editor",        "you",          None),
-    ("08", "thumbnail",  "Title, opening and thumbnail",  "Claude + you", "first-impression"),
-    ("09", "captions",   "Captions and description",      "Claude",       "captions-and-description"),
-    ("10", "publish",    "Publish on the course site",    "you",          None),
-    ("11", "clips",      "Short clips",                   "Claude",       "perfect-clips"),
+    ("03", "sound",      "Clean the sound",               "Claude",       "lecture-video (audio-enhance)"),
+    ("04", "cut",        "Cut the retakes, place slides", "Claude",       "lecture-video (perfect-cuts)"),
+    ("05", "review",     "Check the result (stills, logs)", "Claude",     "lecture-video"),
+    ("06", "cards",      "Text cards",                    "Claude",       "lecture-video (text-treatments)"),
+    ("07", "assemble",   "Finished video with the text",  "Claude",       "lecture-video"),
+    ("08", "thumbnail",  "Title, opening, thumbnail idea", "Claude",      "first-impression"),
+    ("09", "captions",   "Captions and description",      "Claude",       "lecture-video"),
+    ("10", "publish",    "Watch it, then publish",        "you",          None),
+    ("11", "clips",      "Short clips (on request)",      "Claude",       "perfect-clips"),
     ("12", "pick",       "Pick the clips",                "you",          None),
     ("13", "polish",     "Polish the clips",              "you",          None),
     ("14", "publish-clips", "Publish the clips",          "you",          None),
 ]
-
 
 def now():
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")

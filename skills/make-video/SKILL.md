@@ -1,15 +1,20 @@
 ---
 name: make-video
-description: Run the whole video-teach-plugin workflow for an educational video with talking-head footage, from beat sheet to finished video and short clips, in 14 steps. Claude does the sound, the cut, the text cards or slides (a lecture with a deck goes through lecture-video, end to end), the captions and the clips; the user drafts, films, reviews, assembles in iMovie (or any editor) and publishes by hand. Keeps a status file in the video's folder, stops with a Mac notification at every step that is the user's, and picks up where it left off after a break. Use when the user says "make a video", "start a new lecture video", "continue my video", "where was I", or runs /video-teach-plugin:make-video.
+description: Run the whole video-teach-plugin workflow for an educational video with talking-head footage, from beat sheet to finished video. The user films; after that Claude runs every step to the finished video with no question and no stop - the sound, the cut, the slides if there is a deck, the text cards, the captions, the course-page description and a title and thumbnail idea - through lecture-video. The user then watches the result and publishes it by hand; short clips on request. Keeps a status file in the video's folder, sends one Mac notification when the video is finished, and picks up where it left off after a break. Use when the user says "make a video", "start a new lecture video", "continue my video", "where was I", or runs /video-teach-plugin:make-video.
 ---
 
-# make-video: the whole workflow, one step at a time
+# make-video: film it, and Claude does the rest
 
 $ARGUMENTS
 
 This skill runs the other skills of the plugin in the right order and keeps track
-of where each video stands. It does no editing of its own. For each step it
-calls one skill, or it stops and tells the user what to do.
+of where each video stands. It does no editing of its own.
+
+**The promise to the user: set up once, film, hand over the recording.** From the
+moment the recording is in the video folder, nothing asks the user anything until the
+finished video is there. Every judgment (the cut, the slides, the cards, the
+description) is Claude's, made with the rules of the skills and logged with its reason.
+The user judges the finished video and says what to change, in a sentence.
 
 The plugin is made for **educational videos with talking-head footage**: one
 person on camera, explaining. Any video editor works; iMovie stands for "iMovie,
@@ -68,31 +73,20 @@ in the middle leaves an honest record.
      ask the user to run it first; it installs the tools and asks these
      questions. If only the look is missing, ask the three look questions now,
      through `text-treatments` Step 0.
-4. **Say once which steps need a strong model.** Step 04 (the cut) needs Sonnet
-   at high effort or Opus at medium effort; `perfect-cuts` checks this itself
-   and stops otherwise. Steps 06, 08 and 11 also read the transcript closely and
-   do best on the same models. The other steps are scripts and run on any model.
+4. **Say once which steps need a strong model.** The editing run (steps 03 to 09)
+   makes judgment calls and wants Sonnet at high effort or Opus at medium effort.
+   On a weaker model say so in one line and carry on; `lecture-video` repeats it in
+   its closing summary.
 
-## The 14 steps
+## The steps
 
-Run them in order. "You" steps belong to the user (see "A step that is yours").
-
-| Step | Who | What | Skill / input → output |
+| Step | Who | What | Skill / input -> output |
 |---|---|---|---|
-| 01 | You + Claude | Draft the beat sheet | `beatsheet` → `beat-sheet.html` in the video folder |
-| 02 | You | Film | the raw take, placed in the video folder |
-| 03 | Claude | Clean the sound | `audio-enhance` on the **raw take** → `<stem>_enhanced-audio.<ext>` |
-| 04 | Claude | Cut the retakes | `perfect-cuts` on the **cleaned file from 03**, never the raw take → `1 WATCH - final video (C).mp4`; then the audio gate. **With a slide deck: `lecture-video` does 04 and 06 in one run** |
-| 05 | You | Review the cut | watch the MP4 once; changes go back to 04 |
-| 06 | Claude | Text cards **or** slides | a slide deck → `lecture-video` (already done at 04); no deck → the card text from `text-treatments` |
-| 07 | You, then Claude | Assemble | iMovie, or any editor; then Claude burns the text cards into the export |
-| 08 | Claude + You | Title, opening, thumbnail | `first-impression` → `first-impression.html`; the user makes the thumbnail |
-| 09 | Claude | Captions and description | `captions-and-description` on the user's **final export**; then the audio gate |
-| 10 | You | Publish | upload by hand to the course site |
-| 11 | Claude | Short clips | `perfect-clips` on the final export; upright clips come from the speaker cut |
-| 12 | You | Pick the clips | keep the best |
-| 13 | You | Polish the clips | iMovie, or any editor |
-| 14 | You | Publish the clips | upload by hand |
+| 01 | You + Claude | Draft the beat sheet (optional) | `beatsheet` -> `beat-sheet.html` in the video folder |
+| 02 | You | Film | the raw take (and the deck, if the lecture has one) in the video folder |
+| 03-09 | Claude | **One run, no stops**: sound, cut, slides, text cards, finished video, captions, description, then title and thumbnail idea | `lecture-video` on the video folder, then `first-impression` |
+| 10 | You | Watch it, then publish | changes in a sentence go back into the run; upload by hand |
+| 11-14 | Claude, then you | Short clips, only on request | `perfect-clips`; pick, polish, post by hand |
 
 ### 01 Beat sheet
 
@@ -104,223 +98,117 @@ filmed, or work from their own notes): `set 01 skipped --note "<why>"`.
 
 ### 02 Film
 
-A "you" step. Tell the user: film the lecture, one take per section, restarts
-are fine, then put the recording (the camera or recorder file, not an export)
-into the video folder, or tell you where it is. When the file is there, check it
-with `ffprobe` (duration, a video and an audio stream), then
-`set 02 done --output "<raw take>"`.
+A "you" step, the last one before the finished video. Tell the user: film the
+lecture, one take per section; when a sentence goes wrong, start it again without
+stopping the camera. Then put the recording (the camera or recorder file, not an
+export) into the video folder, with the slides as PDF or PowerPoint if the lecture
+has them, and say "continue". When the file is there, check it with `ffprobe`
+(duration, a video and an audio stream), then `set 02 done --output "<raw take>"`.
 
-### 03 Clean the sound
+**Never ask whether there are slides.** A `.pdf` or `.pptx` in the folder is the
+deck; no such file means a lecture without slides. Both are normal.
 
-`set 03 running --input "<raw take>"`, then run the `audio-enhance` skill on the
-raw take, as its SKILL.md says (it is one script; relay its table and every
-`WARNING:` line). Its output for a video is `<stem>_enhanced-audio.<ext>` next to
-the raw take. `set 03 done --output "<that file>"`. If it prints `MISSING`, the
-tools are not installed: point the user to `/video-teach-plugin:setup` and stop.
+### 03 to 09: the editing run
 
-### 04 Cut the retakes
+From here to the end of step 09, run everything in one go, in one turn, with no
+question to the user and no "you" step. A break in the middle (a closed session)
+resumes from `status.py show` and `lecture_run.py next`.
 
-**First: does this lecture have a slide deck?** If a `.pdf` or `.pptx` sits in the
-video folder, the answer is yes (say so in one line). Otherwise ask once: "Does this
-lecture have a slide deck you want on screen?" On a yes, ask the user to put the deck
-into the video folder, and take the **lecture path**:
-
-1. `set 04 running --input "<cleaned file from 03>"`.
-2. Run the `lecture-video` skill on the video folder with
-   `--video "<cleaned file from 03>"` (it is already audio-enhanced, so lecture-video
-   does not enhance it again). It runs all four phases with no approval stop: the A/B
-   slide edit, its own `perfect-cuts` pass with the audio gate, the text cards in
-   setting A, and the finished video with the text baked in.
-3. `set 04 done --output "<folder>/<folder name> perfect cut (C)/1 WATCH - final video (C).mp4"`.
-4. Step 05 below is then the review of `<folder name>-finished-with-text.mp4`, the whole
-   lecture. Changes go back to the lecture-video phase they belong to (a slide or A/B
-   timing: from compose; a cut: from cut; a card: finish); `reopen 04` first.
-5. Step 06 needs no new work: `set 06 done --choice path=lecture-video --output
-   "<folder>/<folder name>-finished-with-text.mp4"`.
-
-Without a deck, cut as follows. `set 04 running --input "<cleaned file from 03>"`. Run `perfect-cuts` on the
-**cleaned file**, never the raw take: on raw audio, room noise keeps restarts
-glued to the line before them. Give it the answers you already have, so it asks
-only what is open: the clip path, Q1 (script) from the beat sheet or step 01's
-answer, Q2 = yes (the MP4), Q3 = next to the source clip (the video folder).
-
-Step 04 has three parts:
-
-1. **The analysis and the editorial pass**, as `perfect-cuts`' SKILL.md
-   describes them: transcription, the speech map, the check for dropped speech,
-   and the editorial pass. Their product is `cuts.json`.
-2. **One call builds the whole package** from `cuts.json` (the MP4, the timeline
-   files, the captions, the cut log):
+1. `set 03 running --input "<raw take>"`.
+2. Run the `lecture-video` skill on the video folder, as its SKILL.md says, all four
+   phases and Judgment 4, with `--video "<raw take>"` (and `--deck` only if the user
+   named a deck outside the folder). It grades the picture if needed, cleans the
+   sound, places the slides (or keeps the speaker throughout when there is no deck),
+   cuts the retakes, writes and places the text cards, renders the finished video,
+   writes the captions and the transcript, and you write the course-page
+   description. Its sound gate and checks run inside; a real failure stops it with
+   `lecture/stop-reason.txt`: say the reason and stop.
+3. Record the steps it covered, each with its file:
 
    ```bash
-   TV_DATA="$TV_DATA" python3 "${CLAUDE_PLUGIN_ROOT}/skills/perfect-cuts/scripts/build_package.py" \
-     --source "<cleaned file from 03>" --cuts "<cuts.json>" \
-     --out "<video folder>/<stem> perfect cut (C)" [--title "<video title>"]
+   F="<video folder>"; N="<folder name>"
+   TV_DATA="$TV_DATA" python3 "$MV/status.py" set "$F" 03 done --output "$F/lecture/<the _enhanced-audio file>"
+   TV_DATA="$TV_DATA" python3 "$MV/status.py" set "$F" 04 done --output "$F/$N perfect cut (C)/1 WATCH - final video (C).mp4"
+   TV_DATA="$TV_DATA" python3 "$MV/status.py" set "$F" 05 done --note "stills and logs checked by Claude"
+   TV_DATA="$TV_DATA" python3 "$MV/status.py" set "$F" 06 done --choice path=lecture-video --output "$F/text-cards/cards.json"
+   TV_DATA="$TV_DATA" python3 "$MV/status.py" set "$F" 07 done --output "$F/$N-finished-with-text.mp4"
    ```
 
-   It prints a JSON summary. Take the MP4 path from that summary; do not
-   rebuild the path by hand. A non-zero exit means the package is incomplete:
-   relay the error and stop.
-3. **The audio gate on that MP4:**
+   (Mark each `running` first if `set` asks for it.) Step 05 is your own check, not
+   the user's: look at `lecture/check/` (every card still, setting A and B) and the
+   summary before you go on. A card that is cut off, a slide in the wrong place you can
+   see from the log: fix it in the phase it belongs to and render again, then go on.
+4. **08 Title, opening, thumbnail idea.** Run `first-impression` on the transcript,
+   without its questions: take the topic and audience from the beat sheet if there is
+   one, else from the transcript; replace an existing `first-impression.html` only if
+   this run wrote it. `set 08 done --output "<folder>/first-impression.html"`. The
+   thumbnail itself is the user's, and optional; mention the idea in the handover.
+5. **09 Captions and description** were made by `lecture-video`:
+   `set 09 done --output "<folder>/captions.srt" --output "<folder>/course-page-description.txt"`.
 
-   ```bash
-   python3 "$MV/aqc_gate.py" "<MP4 from the summary>" --cleaned
-   ```
+### 10 Watch it, then publish
 
-   `--cleaned` because this MP4 came from the cleaned file of step 03. On a
-   cleaned file the gate's advice is about the next recording, never "run
-   audio-enhance again", which could not help.
-
-Relay the gate's first lines: its verdict ("Sound check: OK to continue." or
-"Sound check: STOP ...") and any advice. The table below them is detail; it has
-no verdict of its own in gate mode. Exit 0 = continue (warnings are advice: the level spread and
-the noise floor often warn on a tight cut, and that is fine). Exit 2 = loudness
-or true peak failed: stop, say which, and do not go on to 05. Exit 3 = the gate
-could not find its checks in the result: stop and report it as a plugin fault;
-never treat it as a pass. Run the gate on the finished cut only, never on the
-uncut cleaned file: there the retake pauses and the floor after noise removal
-make other checks fail that the cut does not have.
-
-`set 04 done --output "<MP4 from the summary>"`.
-
-### 05 Review the cut
-
-A "you" step: notify, then tell the user to watch `1 WATCH - final video
-(C).mp4` once, start to end, and to say "looks good" or name what to change
-("bring back the sentence about Kant", "cut the second example").
-
-- Changes: `reopen 04`, then fix the named block decisions in `cuts.json` and
-  run `build_package.py` again with the same arguments (never redo the
-  transcription), then the audio gate, then come back to 05.
-- Approved: `set 05 done`.
-
-### 06 Text cards or slides
-
-On the lecture path this step is already done (see 04). Otherwise ask one
-question: **"Does this lecture have a slide deck you want on screen?"**
-
-- **Yes** (the deck turned up only now) → run `lecture-video` on the video
-  folder with `--video "<cleaned file from 03>"`. It makes its own cut from the
-  slide composite, so its package supersedes the step-04 cut; say so in one
-  line. `set 06 done --choice path=lecture-video --output
-  "<folder>/<folder name>-finished-with-text.mp4"`. (For slides laid over the
-  step-04 cut in another layout, with no cards, `video-with-slides` is the
-  alternative: `--choice path=slides --output "<cut name>-with-slides.mp4"`.)
-- **No** → run `text-treatments` Step 1 only: it writes the cards from the
-  transcript, each with the words it belongs to, and shows the wording first.
-  Nothing renders yet: the cards are burned into the final export at the end of
-  step 07. `set 06 done --choice path=text-cards --output
-  "<video folder>/text-cards/cards.json"`.
-- The user wants neither: `set 06 skipped`.
-
-### 07 Assemble
-
-A "you" step. Notify, then give the hand-off in plain words:
-
-- **With text cards:** put the video together **without** the cards (the
-  background, any screen recordings, anything else). Claude adds the cards
-  afterwards, each at its words.
-- **Lecture path (lecture-video):** `<folder name>-finished-with-text.mp4` already
-  is the finished video, text included. If the user wants nothing else, `set 07
-  done --output` that file. To add more in iMovie (or any editor), import it and
-  export again; for an editor that reads alpha, the cut (`1 WATCH`) plus
-  `<folder name>-text-overlay.mov` on the track above keeps the text editable.
-- **With slides (video-with-slides):** the `-with-slides.mp4` already is the
-  video; import it and add anything else they want.
-- Then: export the finished video into the video folder (in iMovie: File >
-  Share > File) and say "done".
-
-Never guess the export: the newest video in the folder is often a file the
-plugin wrote. If the user names the file, use it. Otherwise list the folder and
-ask which file they exported:
+The first "you" step after filming. `set 10 waiting-for-you`, then notify:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/captions-and-description/scripts/find_export.py" "<video folder>"
+bash "$MV/notify.sh" "Your lecture video is finished" "<folder name>-finished-with-text.mp4"
 ```
 
-Check the chosen file with `ffprobe`.
+The handover message, in this order:
 
-**If step 06 chose text cards**, burn them in now: run `text-treatments` Steps
-2 to 4 on this export (place, show the timing table and wait for approval,
-render, burn, look at the contact sheet). The result,
-`<export name>-with-cards.mp4`, is the final export from here on:
-`set 07 done --output "<video folder>/<export name>-with-cards.mp4"`.
+1. The finished video (full path) and its length.
+2. What Claude decided, from the `lecture-video` summary, shortened: the cuts, the
+   slides (or "you on screen throughout"), the cards, any warning.
+3. The other files: `captions.srt` (upload it as the caption track, not as a
+   download), `transcript.txt`, `course-page-description.txt`, the title and the
+   thumbnail idea from `first-impression.html`.
+4. **"Watch it once. If something should change, say it in a sentence ('show the
+   slide at 4:10', 'bring back the sentence about Kant', 'drop the second card') and
+   I render it again. The plugin never publishes anything: upload the video and the
+   captions to your course site yourself."**
+5. "Short clips for announcements? Say 'make short clips'."
 
-Otherwise `set 07 done --output "<final export>"`.
-Every later step takes the export from step 07's output in the status file.
+A change: `reopen` the step it belongs to (04 for a cut or a slide, 06 for a card),
+redo that `lecture-video` phase and the ones after it, and the captions with them.
+`set 10 done` when the user says the video is up.
 
-### 08 Title, opening and thumbnail
+### 11 to 14 Short clips (only on request)
 
-Run `first-impression` on the final export or the beat sheet. Then a "you"
-step: notify, and tell the user to make the thumbnail in Canva or any image app
-from the picked poster-frame idea, and to use the picked title on the course
-page. `set 08 done --output "<video folder>/first-impression.html"` once they
-say it is done (or `skipped` if they do not want a thumbnail).
-
-### 09 Captions and description
-
-Run `captions-and-description` on the **final export from 07**, never the raw
-take or the cut MP4 (the captions must match the video students see). **Name
-the file to it explicitly**: read the path from step 07's output in the status
-file and pass it as the input, so the skill does not search the folder. Then the
-audio gate on the same file:
-
-```bash
-python3 "$MV/aqc_gate.py" "<final export>" --cleaned
-```
-
-`--cleaned` because the export was assembled from the cleaned cut of step 04.
-
-Exit 2 means the export lost loudness or clips: tell the user, and suggest
-re-exporting from the editor without volume changes. Exit 3 is a plugin fault:
-stop and report it. `set 09 done --output
-"<folder>/captions.srt" --output "<folder>/course-page-description.txt"`.
-
-### 10 Publish
-
-A "you" step. **The plugin never publishes anything.** Tell the user which
-three files go to the course site: the final export, `captions.srt` (upload it
-as the caption track, not as a download), and the text of
-`course-page-description.txt`. `set 10 done` when they say so.
-
-### 11 Short clips
-
-Ask whether they want short clips for announcements or the course homepage. If
-yes, run `perfect-clips` on the final export (upright for phones, or wide for a
-course page; the skill asks). Upright clips are cut from the speaker cut, not the
-export: perfect-clips finds that cut in the video folder by itself, so a text
-card burned into the export is never sliced in half by the upright crop. Wide
-clips use the export as it is. `set 11 done --output "<clips package folder>"`.
-If no, `set 11 skipped` and also skip 12–14.
-
-### 12, 13, 14 Pick, polish, publish the clips
-
-"You" steps, one at a time: pick the best clips (12), polish them in iMovie or
-any editor (13), upload them by hand (14). `set NN done` after each.
+Only when the user asks. Run `perfect-clips` on the finished video (upright for
+phones, or wide for a course page; the skill asks). Upright clips are cut from the
+speaker cut, not the export: perfect-clips finds that cut in the video folder by
+itself, so a burned-in card is never sliced by the upright crop. `set 11 done
+--output "<clips package folder>"`, then 12 to 14 are the user's: pick, polish in any
+editor, post by hand. Without a request, leave 11 to 14 pending.
 
 ## A step that is yours
 
-At every "you" step, in this order:
+Two steps after the beat sheet are the user's: 02 (film) and 10 (watch, publish).
+At each, in this order:
 
 1. `set <step> waiting-for-you`.
-2. Send the notification:
-   ```bash
-   bash "$MV/notify.sh" "Step <NN>: <what to do, 3-6 words>" "<the file to use>"
-   ```
-3. Tell the user exactly: what to do, which file to use (full name, and the
-   folder), and how to come back: **"When you are done, say 'continue', or run
+2. Send the notification with `notify.sh`, as above.
+3. Tell the user what to do, which file to use (full name and folder), and how to
+   come back: **"When you are done, say 'continue', or run
    /video-teach-plugin:make-video."**
 4. Stop. Do not start the next step in the same turn.
 
-When the user comes back, run `show` and continue at the waiting step: confirm
-it is done (check the file it should have produced), mark it `done`, and go on.
+When the user comes back, run `show` and continue at the waiting step: confirm it
+is done (check the file it should have produced), mark it `done`, and go on.
+
+## Without the run: the single skills
+
+Each skill still runs on its own when a user wants one piece by hand: `audio-enhance`,
+`perfect-cuts`, `text-treatments` (cards over an export from their own editor, with
+its approval of the wording and the timing), `video-with-slides` (other slide
+layouts), `captions-and-description` (captions for an export the user made
+themselves). make-video does not use them one by one any more.
 
 ## Prompts to remember
 
 - `/video-teach-plugin:make-video` - start a new video, or continue the last one.
-- "Continue my video." / "Where was I?" - shows the 14 steps and picks up.
-- "Start a new lecture video about <topic>."
-- "Go back to the cut." - reopens step 04.
-- "Skip the text cards." / "This lecture has slides." - steers steps 04 and 06.
-- `/video-teach-plugin:lecture-video` - drop a recording and a deck into a video
-  folder and get the finished lecture video, with no stops.
+- "Here is my recording (and my slides): make the lecture video." - the editing run, straight away.
+- "Continue my video." / "Where was I?" - shows the steps and picks up.
+- "Show the slide at 4:10." / "Bring back the sentence about Kant." - a change after watching.
+- "Make short clips from this lecture." - steps 11 to 14.
+- `/video-teach-plugin:lecture-video` - the editing run on its own.

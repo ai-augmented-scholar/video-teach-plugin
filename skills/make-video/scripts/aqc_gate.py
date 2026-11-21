@@ -111,7 +111,7 @@ def cleaned_advice(row):
                 "the mic. For the next recording, keep a fixed distance from it.")
     if cid == "silences":
         return ("There is a pause of 2 s or more in the file. If it is not on "
-                "purpose, ask for it to be cut at the review (step 05) or cut it "
+                "purpose, ask for it to be cut when you watch the result (step 10) or cut it "
                 "in your editor.")
     if cid == "true_peak":
         return ("Slightly above the -1.5 dBTP target, usually from the editor's "

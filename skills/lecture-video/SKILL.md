@@ -1,18 +1,24 @@
 ---
 name: lecture-video
-description: Turn a talking-head lecture recording and its slide deck (PDF or .pptx) into one finished, professional lecture video, end to end and with no approval stops. Claude cuts between setting A (the speaker alone, framed a little right of centre, with animated text cards in the free left side) and setting B (the slide almost full screen on a neutral background, the speaker as a small rounded insert), decides itself when to switch, cuts the retakes and fillers, adds text cards in setting A only, and bakes them into the final MP4. Use when the user drops a lecture recording plus slides into a video folder, says "make a lecture video", "my lecture with slides", "slides with me in the corner", "put my slides in", or runs /video-teach-plugin:lecture-video. Also the slides path of make-video.
+description: Turn a talking-head lecture recording, and its slide deck (PDF or .pptx) if there is one, into one finished, professional lecture video with captions, a transcript and a course-page description, end to end and with no approval stops. Without a deck the whole video is the speaker with text cards. With a deck, Claude cuts between setting A (the speaker alone, framed a little right of centre, with animated text cards in the free left side) and setting B (the slide almost full screen on a neutral background, the speaker as a small rounded insert), decides itself when to switch, cuts the retakes and fillers, adds text cards in setting A only, and bakes them into the final MP4. Use when the user drops a lecture recording (with or without slides) into a video folder, says "make a lecture video", "edit my lecture", "here is my recording", "my lecture with slides", "slides with me in the corner", "put my slides in", or runs /video-teach-plugin:lecture-video. Also the editing chain of make-video, with or without slides.
 ---
 
 # Lecture video
 
 $ARGUMENTS
 
-**Drop in the talking-head recording and the slides; get a finished lecture video out.**
-One input, a video folder that holds the recording and the deck. The chain grades the
+**Drop in the talking-head recording, and the slides if you have them; get a finished lecture video out.**
+One input, a video folder that holds the recording and, optionally, the deck. The chain grades the
 picture if it is phone HDR, cleans the sound, builds the A/B slide edit, cuts the
 retakes, brings the A/B timeline across the cuts, writes text cards for setting A, and
 renders the finished MP4 with the text baked in, plus a transparent text overlay for
-anyone who wants to keep editing in iMovie (or any editor).
+anyone who wants to keep editing in iMovie (or any editor), then the captions, the
+transcript and the course-page description of the finished video.
+
+**No deck?** Then the whole lecture is setting A: the speaker, framed by the framing
+rule, with text cards in the free column. prepare skips the slide steps and writes the
+one-segment timing itself; Judgment 1 is only the framing landmarks. Everything else
+runs the same. Never ask the user for slides: a missing deck is a choice, not a fault.
 
 | | Setting A | Setting B |
 |---|---|---|
@@ -36,7 +42,7 @@ The user judges the finished video and says what to change.
   `<package>/4 REVIVE - cut decisions (C).csv` holds every cut with its reason;
   `text-cards/placement-table.txt` holds every card's place and every skipped card.
 - **Hard stops, only for real failures**, each written to `lecture/stop-reason.txt` by
-  the scripts and said in your closing message: no video or no deck, PQ HDR footage, a
+  the scripts and said in your closing message: no video, PQ HDR footage, a
   picture too bright for the highlight gate, a deck that cannot become a PDF, a broken
   input, a failed step, a failed check (composite length, the A/B mapping against the
   real picture, an overlay with alpha inside setting B), a judgment file missing. A
@@ -82,6 +88,7 @@ setup; default `~/Movies/teaching-videos`).
 Inside the folder (or its `raw/` subfolder) the chain takes the newest video (`.mov`,
 `.mp4`, `.m4v`, `.mkv`; its own outputs are skipped) and the newest deck (`.pdf`, best,
 or `.pptx`). With several candidates it takes the newest and logs what it left alone.
+No deck in the folder means no slides: the run goes on in setting A throughout.
 
 ## The four phases
 
@@ -93,6 +100,7 @@ TV_DATA="$TV_DATA" python3 "$SK/lecture_run.py" compose "<video folder>"
 TV_DATA="$TV_DATA" python3 "$SK/lecture_run.py" cut "<video folder>"
 #   -> Judgment 3: the text cards for setting A (text-cards/cards.json)
 TV_DATA="$TV_DATA" python3 "$SK/lecture_run.py" finish "<video folder>"
+#   -> Judgment 4: names in the captions, course-page-description.txt
 TV_DATA="$TV_DATA" python3 "$SK/lecture_run.py" next "<video folder>"      # where a run stands, after a break
 ```
 
@@ -128,6 +136,9 @@ every placed card visible), the finished video with the text baked in, check sti
 final timing log, and the summary.
 
 ## Judgment 1 (after prepare)
+
+**Without a deck**, only the framing landmarks below are left: the timing is already
+one setting-A segment. Skip the slide timing and the A/B decision.
 
 ### The slide timing
 
@@ -252,6 +263,26 @@ Two lecture rules on top:
   stretch, an end card with what comes next. Setting B needs nothing: the slides carry
   the text. `{"cards": []}` is a valid answer for a lecture that is almost all B.
 
+## Judgment 4 (after finish): names, and the course-page description
+
+finish transcribes the finished video and writes `captions.srt` and `transcript.txt` into
+the video folder (a copy the user edited by hand is kept; the new one waits in
+`lecture/captions-work/`). Two things are left, still without a question:
+
+1. **Spelling of names and terms.** Parakeet spells unfamiliar names by sound. Correct
+   them in both files the same way, against the slide text (`lecture/slides.json`) and
+   the beat sheet if the folder has one. Words only: never a timing line, never a merged
+   or split cue, never the speaker's grammar. List every correction in the closing
+   message ("Rousso -> Rousseau (6 places)").
+2. **`course-page-description.txt`**, in the video folder, written from
+   `lecture/captions-work/outline.txt` and `transcript.txt` with the template and rules of
+   `captions-and-description` (SKILL.md Step 5): title, two or three sentences on what
+   the student will learn, 3 to 5 key points with times from the outline, the terms and
+   readings the video names, the length. `[FILL IN: ...]` where a fact is missing. If
+   finish says the file was edited by hand, leave it and say so.
+
+Then the closing message: the summary, shortened, the corrections, and the files.
+
 ## The look
 
 **Setting A cards** are the plugin's neutral design system
@@ -292,13 +323,14 @@ right, `"ins_side": "left", "gap_left": 0.12, "gap_right": 0.05` (a mirrored set
 |---|---|
 | `<folder>-finished-with-text.mp4` | **The finished lecture video**, text baked in. Upload it as it is. |
 | `<folder>-text-overlay.mov` | The text cards alone, full length, transparent (ProRes 4444). For an editor: lay it on a track above `1 WATCH` of the package. iMovie does not honour alpha in an overlay; use the finished MP4 there. |
+| `captions.srt`, `transcript.txt`, `course-page-description.txt` | The caption track (upload it as captions, not as a download), the full text, and the description for the course page. |
 | `<folder> perfect cut (C)/` | The cut without text (`1 WATCH - final video (C).mp4`), captions, timeline files for editors that read them, the cut log. |
 | `lecture/timing-log.csv`, `lecture/run-log.csv` | What was decided and why. |
 | `lecture/check/` | Stills: setting A and B of the finished video, one per card. |
 
 Look at `lecture/check/final-A.png`, `final-B.png` and every `final-card-NN.png`
-yourself before the closing message. Captions and the course-page description come next
-in `make-video` (step 09, `captions-and-description` on the finished video).
+yourself before the closing message. Nothing else is left for the user to run: they
+watch the finished video, say what to change if anything, and upload it with the captions.
 
 ## Filming checklist (for the user's next recording)
 

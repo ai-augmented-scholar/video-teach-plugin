@@ -71,7 +71,10 @@ def main():
     sf = load(lec / "settings-final.json")
     if sf:
         b = sum(y - x for x, y in sf["b_intervals"])
-        print("  Setting B is %.0f%% of the %s video." % (100 * b / sf["duration"], fmt(sf["duration"])))
+        if sf["b_intervals"]:
+            print("  Setting B is %.0f%% of the %s video." % (100 * b / sf["duration"], fmt(sf["duration"])))
+        else:
+            print("  Setting A (the speaker) throughout the %s video." % fmt(sf["duration"]))
 
     if pkgs:
         cut = load(pkgs[-1] / "cut data (C).json")
@@ -110,6 +113,11 @@ def main():
                                              "over 1 WATCH in the package)")):
         for x in f.glob(pat):
             print("  %s\n      %s" % (x, what))
+    for name, what in (("captions.srt", "the caption track: upload it with the video"),
+                       ("transcript.txt", "the full text, for the course page"),
+                       ("course-page-description.txt", "the description for the course page")):
+        if (f / name).exists():
+            print("  %s\n      %s" % (f / name, what))
     if pkgs:
         print("  %s\n      the perfect-cuts package (1 WATCH is the video without text; 4 REVIVE is the cut log)" % pkgs[-1])
     if log.exists():

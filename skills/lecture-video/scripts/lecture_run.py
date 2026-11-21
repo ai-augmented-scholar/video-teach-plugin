@@ -11,11 +11,17 @@ Usage (TV_DATA must hold the plugin data folder, as for every plugin script):
     lecture_run.py next    "<video folder>"     which phase comes next, and what is missing
 
 ONE INPUT: the video folder (a numbered folder under the plugin's videos_root, or any
-folder). Put the talking-head recording and the deck (.pdf or .pptx) in it, or in its
-raw/ subfolder. The chain finds both itself: the newest video and the newest deck; with
-more than one candidate it takes the newest and logs what it left alone. --video and
---deck override the search (the files may then live anywhere). Work goes to
-<folder>/lecture/, the cards to <folder>/text-cards/, and the finished files to the folder.
+folder). Put the talking-head recording in it, or in its raw/ subfolder, and the deck
+(.pdf or .pptx) if the lecture has one. The chain finds both itself: the newest video and
+the newest deck; with more than one candidate it takes the newest and logs what it left
+alone. --video and --deck override the search (the files may then live anywhere). Work
+goes to <folder>/lecture/, the cards to <folder>/text-cards/, and the finished files to
+the folder.
+
+NO DECK: the deck is optional. Without one the whole lecture is setting A (the speaker,
+framed by the framing rule, with text cards in the free column); prepare skips the slide
+steps and writes the one-segment timing itself, so Judgment 1 is the framing landmarks
+only. Everything else runs the same.
 
 Between the phases the model makes the judgment calls the skill describes (SKILL.md),
 each with a reason written into the file it edits. Nothing asks the user anything:
@@ -35,10 +41,12 @@ each with a reason written into the file it edits. Nothing asks the user anythin
        -> model: the text cards for setting A, text-cards/cards.json.
     finish   card placement (never over setting B), the plate decision, the full-length
              transparent overlay, the alpha check inside setting B, the finished video
-             with the text baked in, check stills, the final timing log and the summary.
+             with the text baked in, check stills, the final timing log, the captions
+             and transcript of the finished video, and the summary.
+       -> model: spelling of names and terms in the captions, and course-page-description.txt.
 
 HARD STOPS, only for real failures, each written to <folder>/lecture/stop-reason.txt and
-printed: no video or no deck, PQ HDR footage, a picture no grade brings under the
+printed: no video, PQ HDR footage, a picture no grade brings under the
 highlight gate (or the gate itself; --allow-bright turns it off), a deck that cannot
 become a PDF, a broken input, a failed step, a failed check (composite length, the
 mapped settings against the picture, an overlay with alpha inside setting B), a missing
@@ -70,6 +78,7 @@ SLIDES = PLUGIN / "skills" / "video-with-slides" / "scripts"
 PC = PLUGIN / "skills" / "perfect-cuts" / "scripts"
 TT = PLUGIN / "skills" / "text-treatments" / "scripts"
 MV = PLUGIN / "skills" / "make-video" / "scripts"
+CAP = PLUGIN / "skills" / "captions-and-description" / "scripts"
 ENHANCE = PLUGIN / "skills" / "audio-enhance" / "scripts" / "audio_enhance.py"
 TV_DATA = os.environ.get("TV_DATA", "").strip()
 
@@ -419,6 +428,67 @@ def improve_transcript(video, transcript, work, total_label):
     return better if n1 >= n0 else transcript
 
 
+def transcribe(video):
+    work = OUT / "cut"
+    work.mkdir(exist_ok=True)
+    raw_t = OUT / "transcript-whole.json"
+    sh([PY, TRANSCRIBE, video, "--words", raw_t, "--quiet"])
+    n = len(words_of(raw_t))
+    if n == 0:
+        stop("Parakeet heard no words in %s. Is there speech on the sound track?" % video.name)
+    best = improve_transcript(video, raw_t, work, "%d words" % n)
+    shutil.copyfile(best, OUT / "transcript.json")
+    words = words_of(OUT / "transcript.json")
+    print("%d words, the last one ends at %.1f s" % (len(words), words[-1]["end"]))
+
+
+def prepare_no_deck(folder, state, video, duration, total):
+    """No deck: setting A from start to end. The slide steps, the cues and the A/B judgment
+    fall away; the chain writes the one-segment timing itself. compose, cut and finish need
+    a slides.json, so an empty one stands in (no pages, 16:9 for the unused B geometry)."""
+    for f in ("deck-full.pdf", "deck.pdf", "cues.json", "slide-timing.json", "slide-timing-draft.txt"):
+        if (OUT / f).exists():
+            (OUT / f).unlink()      # left from an earlier run with a deck
+    (OUT / "slides.json").write_text(json.dumps(
+        {"_comment": "Written by lecture_run.py: no deck, so no slides.",
+         "count": 0, "aspect": 16 / 9.0, "pages": []}, indent=1) + "\n")
+    note("deck", "no deck", "slide steps skipped", "the whole lecture is setting A")
+
+    step(5, total, "transcript (Parakeet)")
+    transcribe(video)
+
+    step(7, total, "timing: setting A from start to end")
+    tj = OUT / "timing.json"
+    old = load(tj, {}) or {}
+    has_b = any(s.get("setting") == "B" for s in old.get("segments", []))   # from a run with a deck
+    if state.writable(tj) or not old.get("segments") or has_b:
+        rec = {"_comment": "Written by lecture_run.py: no deck, so setting A throughout.",
+               "duration": round(duration, 3),
+               "segments": [{"start": 0.0, "setting": "A",
+                             "decided_by": "no deck", "note": "no slides: the speaker throughout"}]}
+        for k in LANDMARKS + ("speaker_x",):     # landmarks the model wrote earlier survive
+            if old.get(k) is not None:
+                rec[k] = old[k]
+        tj.write_text(json.dumps(rec, indent=1) + "\n")
+        state.wrote(tj)
+    else:
+        print("timing.json was edited since this command wrote it; kept (--force overwrites).")
+    note("timing", "setting A throughout", "1 segment", "no deck")
+    sh([PY, HERE / "build_timing.py", "table", "--timing", tj, "--words", OUT / "transcript.json",
+        "--slides", OUT / "slides.json"], capture=OUT / "timing-table.txt")
+
+    step(8, total, "source stills for the framing landmarks")
+    sh([PY, HERE / "lecture_compose.py", "--video", video, "--work", OUT, "--timing", tj, "--source-grid"])
+    state["prepared"] = True
+    print("""
+PREPARE DONE (no deck: setting A throughout). No approval stop: the model goes on, now,
+with the one judgment call left (SKILL.md "Judgment 1", the framing landmarks): read
+speaker_x, speaker_eye_y, speaker_shoulder_y, speaker_shoulder_x0, speaker_shoulder_x1 off
+%s/check/source-grid-*.png into %s.
+Then: lecture_run.py compose "%s".""" % (OUT, tj, folder))
+    return None
+
+
 def phase_prepare(a, folder, state):
     if state["video_source"] and not (a.video or a.force):
         pass   # a rerun searches again; the log says what it chose
@@ -435,15 +505,18 @@ def phase_prepare(a, folder, state):
         if deck is None:
             deck = choose("deck", decks, where)
             if deck is None:
-                stop("no deck (.pdf or .pptx) found in %s. Put the slides there." % where)
+                note("input", "no deck", where, "no .pdf or .pptx: the whole lecture is setting A, "
+                     "the speaker with text cards")
+                print("No deck found: the whole lecture is setting A (you, with text cards).")
     else:
         note("input", "files given on the command line", "%s; %s" % (video, deck), "explicit")
     if not video.is_file():
         stop("no such video: %s" % video)
-    if not deck.is_file() or deck.suffix.lower() not in (".pptx", ".pdf"):
+    if deck is not None and (not deck.is_file() or deck.suffix.lower() not in (".pptx", ".pdf")):
         stop("the deck must be a .pptx or a .pdf file: %s" % deck)
     state["video_source"] = str(video)
-    state["deck"] = str(deck)
+    state["deck"] = str(deck) if deck else None
+    state["no_deck"] = deck is None
 
     total = 8
     step(1, total, "picture and sound")
@@ -473,6 +546,9 @@ def phase_prepare(a, folder, state):
     state["fps"] = fps_of(vs)
     print("Video: %s (%dx%d, %.1f s, %s)" % (video.name, vs["width"], vs["height"], duration,
                                             vs.get("r_frame_rate")))
+
+    if deck is None:
+        return prepare_no_deck(folder, state, video, duration, total)
 
     step(2, total, "deck to PDF")
     pdf = OUT / "deck-full.pdf"
@@ -504,17 +580,7 @@ def phase_prepare(a, folder, state):
     slides = load(OUT / "slides.json")
 
     step(5, total, "transcript (Parakeet)")
-    work = OUT / "cut"
-    work.mkdir(exist_ok=True)
-    raw_t = OUT / "transcript-whole.json"
-    sh([PY, TRANSCRIBE, video, "--words", raw_t, "--quiet"])
-    n = len(words_of(raw_t))
-    if n == 0:
-        stop("Parakeet heard no words in %s. Is there speech on the sound track?" % video.name)
-    best = improve_transcript(video, raw_t, work, "%d words" % n)
-    shutil.copyfile(best, OUT / "transcript.json")
-    words = words_of(OUT / "transcript.json")
-    print("%d words, the last one ends at %.1f s" % (len(words), words[-1]["end"]))
+    transcribe(video)
 
     step(6, total, "spoken setting cues (optional)")
     sh([PY, HERE / "find_cues.py", "--words", OUT / "transcript.json", "--out", OUT / "cues.json", "--loose"])
@@ -760,7 +826,7 @@ def phase_finish(a, folder, state):
     overlay = folder / ("%s-text-overlay.mov" % folder.name)
     check = OUT / "check"
     check.mkdir(exist_ok=True)
-    total = 6
+    total = 7
 
     step(1, total, "place the cards (never over setting B)")
     look, had_look = lecture_look()
@@ -834,7 +900,7 @@ def phase_finish(a, folder, state):
         for i, c in enumerate(placed, 1):
             still(final, c["start"] + min(4.0, 0.6 * c["dur"]), check / ("final-card-%02d.png" % i))
 
-    step(6, total, "checks, the timing log, the summary")
+    step(6, total, "checks and the timing log")
     _, fdur, _ = probe(final)
     if abs(fdur - dur) > 1.5 / fps:
         stop("the finished video runs %.3f s, the cut %.3f s." % (fdur, dur))
@@ -847,8 +913,65 @@ def phase_finish(a, folder, state):
         "--out", OUT / "timing-log.csv"])
     note("done", "finished video", final.name, "")
     state["finished"] = str(final)
+
+    step(7, total, "captions and transcript of the finished video")
+    captions(folder, final, state)
     write_runlog()
     sh([PY, HERE / "lecture_summary.py", "--folder", folder], capture=OUT / "summary.txt")
+    desc = folder / "course-page-description.txt"
+    print("""
+FINISH DONE. No approval stop: the model goes on, now, with the last judgment call
+(SKILL.md "Judgment 4"):
+  1. names and terms: correct their spelling in captions.srt and transcript.txt in %s,
+     against the slide text (%s) and the beat sheet if there is one; words only, never a timing.
+  2. %s
+Then the closing message (the summary above, shortened, plus the corrections).""" % (
+        folder, OUT / "slides.json",
+        ("write %s from %s and transcript.txt." % (desc, OUT / "captions-work" / "outline.txt"))
+        if state.writable(desc) else
+        ("%s was edited by hand since the chain wrote it: leave it, and say so." % desc.name)))
+
+
+def captions(folder, final, state):
+    """captions.srt, transcript.txt and the outline for the description, from the finished
+    video (its sound is the cut's, so the captions match what students see). A file the user
+    edited since the chain wrote it is kept; the new one is left in lecture/captions-work/."""
+    work = OUT / "captions-work"
+    work.mkdir(exist_ok=True)
+    rc, out = sh([PY, CAP / "caption_words.py", final, "--workdir", work, "--out", work / "words.json"],
+                 quiet=True)
+    info = load_last_json(out)
+    detail = "%s words" % info.get("words_final", "?")
+    if info.get("words_pass1") not in (None, info.get("words_final")):
+        detail += " (first pass %s)" % info["words_pass1"]
+    dropped = info.get("still_dropped") or []
+    if dropped:
+        detail += "; still missing words near %s" % ", ".join(
+            fmt(d.get("start", 0)) for d in dropped[:6])
+    note("captions", "transcribed the finished video", detail, "Parakeet; windowed pass when speech was dropped")
+    sh([PY, CAP / "make_captions.py", work / "words.json", "--outdir", work, "--outline",
+        work / "outline.txt"], quiet=True)
+    for name in ("captions.srt", "transcript.txt"):
+        dest = folder / name
+        if state.writable(dest):
+            shutil.copyfile(work / name, dest)
+            state.wrote(dest)
+            note("captions", "wrote " + name, dest, "")
+        else:
+            note("captions", "kept " + name, "the new one is in %s" % work,
+                 "edited by hand since the chain wrote it")
+    print("Captions: %s; %s" % (detail, ", ".join(n for n in ("captions.srt", "transcript.txt"))))
+
+
+def load_last_json(text):
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                pass
+    return {}
 
 
 # ---------------------------------------------------------------- next
